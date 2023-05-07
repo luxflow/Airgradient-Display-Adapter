@@ -1,0 +1,158 @@
+esphome:
+  name: air-gradient-v1
+  friendly_name: air-gradient-v1
+
+esp32:
+  board: lolin_s2_mini
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+  baud_rate: 0
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: ""
+
+ota:
+  password: ""
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Air-Gradient-V1 Fallback Hotspot"
+    password: ""
+
+external_components:
+  - source: github://pr#3500
+    components:
+      # list all components modified by this Pull Request here
+      - web_server
+      - web_server_idf
+      - web_server_base
+      - captive_portal
+
+captive_portal:
+
+uart:
+  - rx_pin: 7
+    tx_pin: 9
+    baud_rate: 9600
+    id: uart_0
+
+  - rx_pin: 16
+    tx_pin: 18
+    baud_rate: 9600
+    id: uart_1
+
+spi:
+  clk_pin: 38
+  mosi_pin: 36
+
+i2c:
+  sda: 33
+  scl: 35
+
+font:
+  # 16pt = h16*w8
+  - file: "font/d2coding.ttf"
+    id: font12
+    size: 12
+
+  # 32pt = h32*w16
+  - file: "font/d2coding.ttf"
+    id: font32
+    size: 32
+
+globals:
+  - id: DISPLAY_HEIGHT
+    type: int
+    restore_value: no
+    initial_value: '128'
+  - id: DISPLAY_WIDTH
+    type: int
+    restore_value: no
+    initial_value: '128'
+  - id: FONT12_HEIGHT
+    type: int
+    restore_value: no
+    initial_value: '12'
+
+switch:
+  - platform: gpio
+    pin: 40
+    name: led
+    restore_mode: RESTORE_DEFAULT_ON
+
+display:
+  - platform: st7735
+    id: tft
+    model: "INITR_REDTAB"
+    reset_pin: 21
+    cs_pin: 17
+    dc_pin: 34
+    device_width: 128
+    device_height: 128
+    col_start: 0
+    row_start: 0
+    rotation: 0
+    pages:
+      - id: page1
+        lambda: |-
+          it.printf(0, 0, id(font12), "Temp     C");
+          it.printf(0, (int)id(FONT12_HEIGHT), id(font32), "%2.1f", id(temp).state);
+          it.printf(0, (int)id(DISPLAY_HEIGHT) / 2, id(font12), "Humidity %%");
+          it.printf(0, (int)id(DISPLAY_HEIGHT) / 2 + id(FONT12_HEIGHT), id(font32), "%2.1f", id(humidity).state);
+          it.printf((int)id(DISPLAY_WIDTH) / 2, 0, id(font12), "CO2    ppm");
+          it.printf((int)id(DISPLAY_WIDTH) / 2, id(FONT12_HEIGHT), id(font32), "%4.0f", id(co2).state);
+          it.printf((int)id(DISPLAY_WIDTH) / 2, (int)id(DISPLAY_HEIGHT) / 2, id(font12), "PM   ug/m3");
+          it.printf((int)id(DISPLAY_WIDTH) / 2, (int)id(DISPLAY_HEIGHT) / 2 + id(FONT12_HEIGHT), id(font12), "PM10   %3.0f", id(pm10).state);
+          it.printf((int)id(DISPLAY_WIDTH) / 2, (int)id(DISPLAY_HEIGHT) / 2 + id(FONT12_HEIGHT)*2, id(font12), "PM25   %3.0f", id(pm25).state);
+          it.printf((int)id(DISPLAY_WIDTH) / 2, (int)id(DISPLAY_HEIGHT) / 2 + id(FONT12_HEIGHT)*3, id(font12), "PM100  %3.0f", id(pm100).state);
+
+interval:
+  - interval: 5s
+    then:
+      - component.update: tft
+
+sensor:
+  - platform: sht3xd
+    temperature:
+      id: temp
+      name: "Temperature"
+    humidity:
+      id: humidity
+      name: "Humidity"
+    address: 0x44
+    update_interval: 5s
+
+  - platform: pmsx003
+    # type can be PMSX003, PMS5003S, PMS5003T, PMS5003ST
+    # https://esphome.io/components/sensor/pmsx003.html
+    type: PMSX003
+    uart_id: uart_0
+    pm_1_0:
+      id: pm10
+      name: "Particulate Matter <1.0µm Concentration"
+    pm_2_5:
+      id: pm25
+      name: "Particulate Matter <2.5µm Concentration"
+    pm_10_0:
+      id: pm100
+      name: "Particulate Matter <10.0µm Concentration"
+    # formaldehyde:
+    #  id: hcho
+    #  name: "Formaldehyde (HCHO) concentration in µg per cubic meter"
+
+  - platform: senseair
+    uart_id: uart_1
+    co2:
+      id: co2
+      name: "SenseAir CO2 Value"
+    update_interval: 5s
+    
